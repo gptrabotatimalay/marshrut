@@ -1,0 +1,655 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Путевой лист — маршрут торгпреда</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Onest:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --paper:#F2EDE3;
+  --paper-2:#E8E1D3;
+  --ink:#16130F;
+  --ink-60:rgba(22,19,15,.6);
+  --ink-35:rgba(22,19,15,.35);
+  --ink-12:rgba(22,19,15,.12);
+  --accent:#D24E10;
+  --accent-dk:#A83C0A;
+  --done:#3F7A46;
+  --rule:rgba(22,19,15,.18);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:'Onest',sans-serif;
+  font-size:15px;line-height:1.45;
+  background-image:
+    repeating-linear-gradient(0deg,transparent 0 27px,rgba(22,19,15,.035) 27px 28px),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='.055'/%3E%3C/svg%3E");
+  overscroll-behavior-y:none;
+}
+.wrap{max-width:720px;margin:0 auto;padding:0 0 40px;position:relative}
+
+/* ---------- шапка-бланк ---------- */
+header{padding:18px 18px 0;position:relative}
+.brand{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+h1{
+  font-family:'Oswald',sans-serif;font-weight:700;
+  font-size:clamp(26px,7.5vw,38px);line-height:.95;
+  letter-spacing:.02em;text-transform:uppercase;margin:0;
+}
+h1 em{display:block;font-style:normal;font-size:.42em;letter-spacing:.22em;
+  color:var(--ink-60);font-weight:500;margin-top:7px}
+.stamp{
+  flex:none;width:76px;height:76px;border:2px solid var(--accent);border-radius:50%;
+  color:var(--accent);display:grid;place-items:center;text-align:center;
+  font-family:'Oswald',sans-serif;font-size:9px;line-height:1.15;letter-spacing:.09em;
+  text-transform:uppercase;transform:rotate(-13deg);opacity:.85;
+  box-shadow:inset 0 0 0 1px rgba(210,78,16,.28)
+}
+.stamp b{display:block;font-size:17px;letter-spacing:.02em;margin:2px 0}
+.rule{height:2px;background:var(--ink);margin:14px 18px 0;opacity:.85}
+.rule.thin{height:1px;background:var(--rule);margin:0 18px}
+
+/* ---------- дни ---------- */
+.days{display:flex;gap:6px;padding:14px 18px 12px;overflow-x:auto;scrollbar-width:none}
+.days::-webkit-scrollbar{display:none}
+.day{
+  flex:1 0 auto;min-width:62px;border:1.5px solid var(--ink-12);background:transparent;
+  padding:8px 10px 9px;cursor:pointer;font-family:'Oswald',sans-serif;
+  text-transform:uppercase;letter-spacing:.08em;font-size:13px;color:var(--ink-60);
+  transition:.18s;border-radius:2px;text-align:center;font-weight:500
+}
+.day small{display:block;font-family:'Onest',sans-serif;font-size:9.5px;letter-spacing:.02em;
+  text-transform:none;opacity:.75;margin-top:2px;white-space:nowrap}
+.day:hover{border-color:var(--ink-35)}
+.day[aria-selected="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.day[aria-selected="true"] small{opacity:.7}
+
+/* ---------- сводка ---------- */
+.summary{display:grid;grid-template-columns:repeat(3,1fr);margin:0 18px;
+  border:1.5px solid var(--ink);border-radius:2px;overflow:hidden;background:rgba(255,255,255,.35)}
+.cell{padding:11px 12px;border-right:1px solid var(--ink-12)}
+.cell:last-child{border-right:0}
+.cell span{display:block;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-60);font-weight:600}
+.cell b{font-family:'Oswald',sans-serif;font-size:25px;font-weight:600;line-height:1.15;
+  display:block;margin-top:1px;font-variant-numeric:tabular-nums}
+.cell b i{font-style:normal;font-size:13px;color:var(--ink-60);font-weight:400;margin-left:2px}
+
+/* ---------- экономия ---------- */
+.save{
+  margin:10px 18px 0;padding:10px 13px;border-radius:2px;
+  background:var(--accent);color:#fff;display:flex;align-items:center;gap:10px;
+  font-size:13.5px;box-shadow:3px 3px 0 var(--accent-dk);
+}
+.save b{font-family:'Oswald',sans-serif;font-size:19px;font-weight:600;letter-spacing:.01em;
+  white-space:nowrap}
+.save.hide{display:none}
+.save .ico{flex:none;font-size:17px;line-height:1}
+
+/* ---------- карта ---------- */
+.map-hold{margin:14px 18px 0;position:relative;border:1.5px solid var(--ink);border-radius:2px;
+  overflow:hidden;box-shadow:4px 4px 0 rgba(22,19,15,.1)}
+#map{height:min(46vh,380px);width:100%;background:var(--paper-2)}
+/* карту приглушаем под бумагу, чтобы маршрут читался первым */
+.leaflet-tile-pane{filter:grayscale(1) contrast(.82) brightness(1.1) sepia(.28) opacity(.92)}
+.map-note{position:absolute;left:0;bottom:0;z-index:500;background:var(--ink);color:var(--paper);
+  font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:4px 9px;font-weight:600;
+  font-family:'Oswald',sans-serif}
+.loading{position:absolute;inset:0;z-index:600;background:rgba(242,237,227,.88);
+  display:none;place-items:center;font-family:'Oswald',sans-serif;text-transform:uppercase;
+  letter-spacing:.14em;font-size:13px}
+.loading.on{display:grid}
+.loading .sp{width:9px;height:9px;background:var(--accent);display:inline-block;
+  margin-right:9px;animation:bl .7s steps(2) infinite;vertical-align:middle}
+@keyframes bl{50%{opacity:.15}}
+
+/* маркеры */
+.pin{
+  width:27px;height:27px;border-radius:50%;background:var(--accent);color:#fff;
+  font-family:'Oswald',sans-serif;font-weight:600;font-size:14px;
+  display:grid;place-items:center;border:2px solid var(--paper);
+  box-shadow:0 2px 5px rgba(0,0,0,.35);font-variant-numeric:tabular-nums
+}
+.pin.done{background:var(--done)}
+.pin.start{background:var(--ink)}
+.pin.probe{background:#fff;color:var(--accent);border-color:var(--accent)}
+
+/* ---------- панель управления ---------- */
+.ctl{display:flex;gap:8px;align-items:center;margin:12px 18px 0;flex-wrap:wrap}
+.tgl{display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;
+  border:1.5px solid var(--ink-12);padding:7px 11px;border-radius:2px;transition:.18s;user-select:none}
+.tgl:hover{border-color:var(--ink-35)}
+.tgl input{accent-color:var(--accent);width:15px;height:15px;margin:0;cursor:pointer}
+.tgl[data-on="1"]{border-color:var(--ink);background:rgba(255,255,255,.4)}
+
+/* ---------- список ---------- */
+.list-head{display:flex;justify-content:space-between;align-items:baseline;
+  margin:22px 18px 8px;gap:10px}
+.list-head h2{font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:.13em;
+  font-size:13px;margin:0;font-weight:600}
+.list-head em{font-style:normal;font-size:11.5px;color:var(--ink-60)}
+ol.stops{list-style:none;margin:0;padding:0 18px}
+li.stop{
+  display:grid;grid-template-columns:34px 1fr;gap:12px;padding:13px 0;
+  border-bottom:1px dashed var(--rule);position:relative;
+  animation:in .34s both
+}
+@keyframes in{from{opacity:0;transform:translateY(7px)}}
+li.stop.done .body{opacity:.42}
+.num{
+  font-family:'Oswald',sans-serif;font-size:16px;font-weight:600;
+  width:30px;height:30px;display:grid;place-items:center;
+  border:1.5px solid var(--ink);border-radius:2px;font-variant-numeric:tabular-nums;
+  background:rgba(255,255,255,.5)
+}
+li.stop.done .num{background:var(--done);color:#fff;border-color:var(--done)}
+.body{min-width:0}
+.name{font-weight:600;font-size:15.5px;letter-spacing:-.005em}
+.addr{font-size:13px;color:var(--ink-60);margin-top:1px}
+.leg{font-size:11px;color:var(--ink-35);margin-top:3px;letter-spacing:.04em;
+  font-variant-numeric:tabular-nums}
+.acts{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap}
+.btn{
+  font-family:'Onest',sans-serif;font-size:12.5px;font-weight:600;
+  padding:7px 13px;border-radius:2px;border:1.5px solid var(--ink);
+  background:transparent;color:var(--ink);cursor:pointer;transition:.15s;
+  text-decoration:none;display:inline-block
+}
+.btn:hover{background:var(--ink);color:var(--paper)}
+.btn.go{background:var(--ink);color:var(--paper)}
+.btn.go:hover{background:var(--accent);border-color:var(--accent)}
+.btn.sm{font-size:11.5px;padding:6px 10px;border-color:var(--ink-12);color:var(--ink-60)}
+.btn.sm:hover{border-color:var(--ink);background:transparent;color:var(--ink)}
+li.stop.done .btn.go{opacity:.35;pointer-events:none}
+
+/* ---------- добавление точки ---------- */
+.add{margin:20px 18px 0;border:1.5px dashed var(--ink-35);border-radius:2px;padding:14px;
+  background:rgba(255,255,255,.28)}
+.add h3{font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:.12em;
+  font-size:12px;margin:0 0 4px;font-weight:600}
+.add p{margin:0 0 10px;font-size:12.5px;color:var(--ink-60)}
+.row{display:flex;gap:7px}
+.row input{
+  flex:1;min-width:0;font-family:'Onest',sans-serif;font-size:14px;padding:9px 11px;
+  border:1.5px solid var(--ink-12);border-radius:2px;background:var(--paper);color:var(--ink)
+}
+.row input:focus{outline:none;border-color:var(--ink)}
+.found{margin-top:11px;padding:11px;border:1.5px solid var(--accent);border-radius:2px;
+  background:rgba(210,78,16,.05);display:none}
+.found.on{display:block;animation:in .3s both}
+.found .q{font-size:12px;color:var(--accent);font-weight:700;letter-spacing:.03em;
+  text-transform:uppercase;margin-bottom:5px}
+.cand{display:flex;gap:9px;align-items:flex-start;padding:8px 9px;cursor:pointer;
+  border:1.5px solid transparent;border-radius:2px;transition:.14s;margin-bottom:3px}
+.cand:hover{background:rgba(255,255,255,.5)}
+.cand[data-sel="1"]{border-color:var(--accent);background:rgba(255,255,255,.72)}
+.cand .dot{flex:none;width:15px;height:15px;border-radius:50%;border:1.5px solid var(--ink-35);
+  margin-top:2px;position:relative}
+.cand[data-sel="1"] .dot{border-color:var(--accent)}
+.cand[data-sel="1"] .dot:after{content:"";position:absolute;inset:2.5px;border-radius:50%;
+  background:var(--accent)}
+.cand .fname{font-weight:600;font-size:14px;line-height:1.3}
+.cand .faddr{font-size:12px;color:var(--ink-60);margin-top:1px}
+.found .hint{font-size:11.5px;color:var(--ink-60);margin-top:8px;font-style:italic;
+  padding-top:8px;border-top:1px dashed var(--rule)}
+.found .acts{margin-top:10px}
+.err{font-size:12.5px;color:var(--accent);margin-top:8px;display:none}
+.err.on{display:block}
+.manual-hint{display:none;margin-top:8px;padding:9px 11px;border-left:3px solid var(--accent);
+  background:rgba(210,78,16,.07);font-size:12.5px;line-height:1.4}
+.manual-hint.on{display:block;animation:in .28s both}
+#map.picking{cursor:crosshair}
+.map-hold.picking{box-shadow:0 0 0 3px var(--accent),4px 4px 0 rgba(22,19,15,.1)}
+
+/* ---------- низ ---------- */
+footer{margin:26px 18px 0;padding-top:14px;border-top:2px solid var(--ink);
+  font-size:11.5px;color:var(--ink-60);line-height:1.55}
+footer b{color:var(--ink)}
+.empty{margin:18px;padding:22px;text-align:center;color:var(--ink-60);font-size:13.5px;
+  border:1.5px dashed var(--ink-12);border-radius:2px}
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="brand">
+    <h1>Путевой<br>лист<em id="today">Понедельник · Наурызбайский</em></h1>
+    <div class="stamp">маршрут<b id="cnt">0</b>точек</div>
+  </div>
+</header>
+<div class="rule"></div>
+
+<div class="days" id="days" role="tablist"></div>
+<div class="rule thin"></div>
+
+<div class="summary" style="margin-top:14px">
+  <div class="cell"><span>Пройдено</span><b id="s-done">0<i>/0</i></b></div>
+  <div class="cell"><span>Километры</span><b id="s-km">—</b></div>
+  <div class="cell"><span>В пути</span><b id="s-min">—</b></div>
+</div>
+
+<div class="save hide" id="save">
+  <span class="ico">▲</span>
+  <div>Короче обычного объезда на <b id="save-km"></b><br>
+       это <b id="save-min"></b> экономии каждый день</div>
+</div>
+
+<div class="map-hold">
+  <div id="map"></div>
+  <div class="map-note">оптимальный порядок объезда</div>
+  <div class="loading" id="load"><div><span class="sp"></span>Считаю маршрут</div></div>
+</div>
+
+<div class="ctl">
+  <label class="tgl" id="tgl-round" data-on="0">
+    <input type="checkbox" id="roundtrip"> Вернуться в начало
+  </label>
+  <label class="tgl" id="tgl-geo" data-on="0">
+    <input type="checkbox" id="usegeo"> Старт от меня
+  </label>
+</div>
+
+<div class="list-head">
+  <h2>Порядок объезда</h2>
+  <em id="route-note">считает программа</em>
+</div>
+<ol class="stops" id="stops"></ol>
+
+<div class="add">
+  <h3>Добавить точку</h3>
+  <p>Так торгпред вносит новый магазин. Адрес всегда подтверждается на карте — без этого шага
+     геокодер иногда молча ставит точку не туда.</p>
+  <div class="row">
+    <input id="q" placeholder="Например: Жандосова 55" autocomplete="off">
+    <button class="btn" id="find">Найти</button>
+  </div>
+  <div class="err" id="err"></div>
+  <button class="btn sm" id="manual" style="margin-top:9px">Или ткнуть в карту вручную</button>
+  <div class="manual-hint" id="mhint">Теперь ткни в карту там, где стоит магазин.
+    Это самый надёжный способ: половины домов Алматы в бесплатных базах просто нет.</div>
+  <div class="found" id="found">
+    <div class="q" id="f-q">Которое из них?</div>
+    <div id="cands"></div>
+    <div class="hint">Выбранное показано на карте оранжевой точкой с белой серединой.
+      Встало не туда? Перетащи её пальцем куда надо — и подтверждай.</div>
+    <div class="row" style="margin-top:9px">
+      <input id="pname" placeholder="Название магазина" autocomplete="off">
+    </div>
+    <div class="acts">
+      <button class="btn go" id="ok">Да, добавить</button>
+      <button class="btn sm" id="no">Отмена</button>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <b>Это прототип.</b> Точки — демонстрационные, по реальным адресам Алматы.
+  Маршрут строится по настоящим дорогам через OSRM, порядок объезда до 15 точек —
+  математически оптимальный. Кнопка «Поехали» открывает 2ГИС.<br><br>
+  Карта здесь не 2ГИС: их API платный. Точки, маршрут и переход в навигацию 2ГИС — работают.
+</footer>
+
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const DAYS = [
+ {d:"Пн", full:"Понедельник", district:"Наурызбайский", short:"Наурызб.", pts:[
+   {n:"Магнум Экспресс", a:"Шугыла 347", lat:43.20582, lon:76.78998},
+   {n:"Арзан",           a:"Жандосова 200", lat:43.17951, lon:76.80381},
+   {n:"Береке",          a:"Шугыла 340", lat:43.21073, lon:76.78938},
+   {n:"Шанырак",         a:"Жуалы 1", lat:43.22386, lon:76.79287},
+   {n:"Нурай",           a:"Ушконыр 12", lat:43.18569, lon:76.85829},
+ ]},
+ {d:"Вт", full:"Вторник", district:"Бостандыкский", short:"Бостанд.", pts:[
+   {n:"Галмарт",  a:"Розыбакиева 247", lat:43.20079, lon:76.89275},
+   {n:"Магнум",   a:"Тимирязева 42",   lat:43.22363, lon:76.90634},
+   {n:"Корзина",  a:"Гагарина 236",    lat:43.21238, lon:76.89852},
+   {n:"Small",    a:"Сатпаева 90",     lat:43.23263, lon:76.87928},
+   {n:"Шанырак",  a:"Байзакова 280",   lat:43.23718, lon:76.91505},
+   {n:"Асем",     a:"Ходжанова 2",     lat:43.21034, lon:76.90782},
+   {n:"Тумар",    a:"Тимирязева 15",   lat:43.23074, lon:76.93309},
+   {n:"Нурай",    a:"Розыбакиева 125", lat:43.22685, lon:76.89072},
+   {n:"Алтын",    a:"Левитана 10",     lat:43.20384, lon:76.89798},
+ ]},
+ {d:"Ср", full:"Среда", district:"Ауэзовский", short:"Ауэзов.", pts:[
+   {n:"Магнум Экспресс", a:"Жандосова 55", lat:43.21494, lon:76.8706},
+   {n:"Small",           a:"Жандосова 98", lat:43.21936, lon:76.87998},
+   {n:"Анвар",           a:"Толе би 285",  lat:43.24612, lon:76.85308},
+   {n:"Арзан",           a:"Саина 30",     lat:43.23526, lon:76.84282},
+   {n:"Береке",          a:"Мамыр-1 29",   lat:43.21212, lon:76.84527},
+   {n:"Куаныш",          a:"Шаляпина 22",  lat:43.21037, lon:76.84847},
+   {n:"Дастархан",       a:"Правды 45",    lat:43.229,   lon:76.86201},
+ ]},
+ {d:"Чт", full:"Четверг", district:"Алмалинский", short:"Алмалин.", pts:[
+   {n:"Магнум",   a:"Абылай хана 92",     lat:43.25031, lon:76.94289},
+   {n:"Мадина",   a:"Гоголя 86",          lat:43.25872, lon:76.93682},
+   {n:"Рахат",    a:"Богенбай батыра 132",lat:43.25258, lon:76.94567},
+   {n:"Жулдыз",   a:"Наурызбай батыра 17",lat:43.26378, lon:76.93435},
+   {n:"Small",    a:"Масанчи 78",         lat:43.24611, lon:76.93064},
+   {n:"Байтерек", a:"Карасай батыра 152", lat:43.24822, lon:76.90659},
+   {n:"Арзан",    a:"Сейфуллина 458",     lat:43.25824, lon:76.93288},
+   {n:"Аружан",   a:"Айтеке би 67",       lat:43.25838, lon:76.94228},
+ ]},
+ {d:"Пт", full:"Пятница", district:"Медеуский", short:"Медеу.", pts:[
+   {n:"Галмарт",   a:"Достык 89",     lat:43.23471, lon:76.95706},
+   {n:"Магнум",    a:"Пушкина 50",    lat:43.25436, lon:76.95408},
+   {n:"Дастархан", a:"Зенкова 59",    lat:43.24985, lon:76.95741},
+   {n:"Small",     a:"Достык 226",    lat:43.22568, lon:76.96269},
+   {n:"Береке",    a:"Луганского 96", lat:43.22716, lon:76.96718},
+   {n:"Куаныш",    a:"Омаровой 47",   lat:43.22085, lon:76.97595},
+   {n:"Асем",      a:"Бегалина 128",  lat:43.24406, lon:76.96493},
+ ]},
+];
+
+const OSRM = "https://router.project-osrm.org";
+let cur = 0, ordered = [], legs = [], myPos = null, probe = null, probeData = null;
+
+/* ---- карта ---- */
+const map = L.map('map',{zoomControl:false,attributionControl:false}).setView([43.238,76.889],12);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+L.control.zoom({position:'topright'}).addTo(map);
+L.control.attribution({position:'bottomright',prefix:false})
+  .addAttribution('© OpenStreetMap').addTo(map);
+const layer = L.layerGroup().addTo(map);
+
+const $ = s => document.querySelector(s);
+const fmtKm  = m => (m/1000).toFixed(1).replace('.',',');
+const fmtMin = s => Math.round(s/60);
+
+/* ---- дни ---- */
+DAYS.forEach((day,i)=>{
+  const b=document.createElement('button');
+  b.className='day'; b.setAttribute('role','tab');
+  b.innerHTML=`${day.d}<small>${day.short}</small>`;
+  b.onclick=()=>pick(i);
+  $('#days').appendChild(b);
+});
+
+function pick(i){
+  cur=i;
+  DAYS.forEach((_,k)=>$('#days').children[k].setAttribute('aria-selected', k===i));
+  const day=DAYS[i];
+  day.pts.forEach(p=>{ if(p.done===undefined) p.done=false; });
+  $('#today').textContent=`${day.full} · ${day.district}`;
+  $('#cnt').textContent=day.pts.length;
+  build();
+}
+
+/* ---- построение маршрута ---- */
+async function build(){
+  const day=DAYS[cur];
+  const live=day.pts.filter(p=>!p.done);
+  const round=$('#roundtrip').checked;
+  layer.clearLayers(); probe=null; $('#found').classList.remove('on');
+
+  if(live.length===0){
+    ordered=[];legs=[];render();
+    $('#s-km').textContent='—';$('#s-min').textContent='—';$('#save').classList.add('hide');
+    drawDone(day.pts);
+    return;
+  }
+  if(live.length===1){
+    ordered=[live[0]];legs=[];render();drawAll();
+    $('#s-km').textContent='—';$('#s-min').textContent='—';$('#save').classList.add('hide');
+    return;
+  }
+
+  $('#load').classList.add('on');
+  const head = (myPos && $('#usegeo').checked) ? [myPos] : [];
+  const all  = [...head, ...live];
+  const coords = all.map(p=>`${p.lon},${p.lat}`).join(';');
+
+  try{
+    let q=`roundtrip=${round}&source=first&overview=full&geometries=geojson&annotations=false`;
+    const trip = await fetch(`${OSRM}/trip/v1/driving/${coords}?${q}`).then(r=>r.json());
+    if(trip.code!=='Ok') throw new Error(trip.message||trip.code);
+
+    const t=trip.trips[0];
+    const seq=trip.waypoints.map((w,idx)=>({idx,pos:w.waypoint_index}))
+                .sort((a,b)=>a.pos-b.pos).map(x=>all[x.idx]);
+
+    ordered = head.length ? seq.filter(p=>p!==myPos) : seq;
+    legs = t.legs.map(l=>({dist:l.distance,dur:l.duration}));
+    if(head.length) legs = legs.slice(1);
+
+    $('#s-km').innerHTML  = fmtKm(t.distance)+'<i>км</i>';
+    $('#s-min').innerHTML = fmtMin(t.duration)+'<i>мин</i>';
+
+    drawRoute(t.geometry); drawAll(); render();
+    naive(all, t.distance, t.duration, round);
+  }catch(e){
+    $('#route-note').textContent='сервер маршрутов не ответил';
+    ordered=live; legs=[]; drawAll(); render();
+  }
+  $('#load').classList.remove('on');
+}
+
+/* насколько оптимальный маршрут короче объезда «как записано» */
+async function naive(all, optDist, optDur, round){
+  try{
+    let c=all.map(p=>`${p.lon},${p.lat}`);
+    if(round) c.push(c[0]);
+    const r=await fetch(`${OSRM}/route/v1/driving/${c.join(';')}?overview=false`).then(r=>r.json());
+    if(r.code!=='Ok') return;
+    const d=r.routes[0].distance-optDist, t=r.routes[0].duration-optDur;
+    if(d>400){
+      $('#save-km').textContent=fmtKm(d)+' км';
+      $('#save-min').textContent=fmtMin(t)+' мин';
+      $('#save').classList.remove('hide');
+    } else $('#save').classList.add('hide');
+  }catch(e){}
+}
+
+/* ---- отрисовка ---- */
+function drawRoute(geo){
+  const ll=geo.coordinates.map(c=>[c[1],c[0]]);
+  L.polyline(ll,{color:'#16130F',weight:6,opacity:.13}).addTo(layer);
+  L.polyline(ll,{color:'#D24E10',weight:3.5,opacity:.95}).addTo(layer);
+}
+function pin(p,html,cls){
+  return L.marker([p.lat,p.lon],{icon:L.divIcon({html:`<div class="pin ${cls||''}">${html}</div>`,
+    className:'',iconSize:[27,27],iconAnchor:[13,13]})});
+}
+function drawAll(){
+  const day=DAYS[cur];
+  if(myPos && $('#usegeo').checked) pin(myPos,'★','start').addTo(layer);
+  ordered.forEach((p,i)=>{
+    pin(p,i+1).addTo(layer).on('click',()=>{
+      const el=document.getElementById('stop-'+day.pts.indexOf(p));
+      if(el){el.scrollIntoView({behavior:'smooth',block:'center'});
+        el.style.background='rgba(210,78,16,.09)';
+        setTimeout(()=>el.style.background='',900);}
+    });
+  });
+  day.pts.filter(p=>p.done).forEach(p=>pin(p,'✓','done').addTo(layer));
+  const pts=[...ordered,...day.pts.filter(p=>p.done)];
+  if(pts.length) map.fitBounds(L.latLngBounds(pts.map(p=>[p.lat,p.lon])),{padding:[42,42],maxZoom:15});
+}
+function drawDone(pts){
+  pts.forEach(p=>pin(p,'✓','done').addTo(layer));
+  if(pts.length) map.fitBounds(L.latLngBounds(pts.map(p=>[p.lat,p.lon])),{padding:[42,42],maxZoom:15});
+}
+
+function render(){
+  const day=DAYS[cur], ol=$('#stops');
+  const done=day.pts.filter(p=>p.done).length;
+  $('#s-done').innerHTML=done+`<i>/${day.pts.length}</i>`;
+  $('#route-note').textContent = ordered.length>1 ? 'считает программа' : '';
+  ol.innerHTML='';
+
+  if(!ordered.length){
+    ol.innerHTML='<div class="empty">Все точки на сегодня пройдены.<br>Хорошего вечера.</div>';
+  }
+  ordered.forEach((p,i)=>{
+    const li=document.createElement('li');
+    li.className='stop'; li.id='stop-'+day.pts.indexOf(p);
+    li.style.animationDelay=(i*32)+'ms';
+    const leg = i>0 && legs[i-1] ? `${fmtKm(legs[i-1].dist)} км · ${fmtMin(legs[i-1].dur)} мин от прошлой` : 'первая точка';
+    li.innerHTML=`
+      <div class="num">${i+1}</div>
+      <div class="body">
+        <div class="name">${p.n}</div>
+        <div class="addr">${p.a}</div>
+        <div class="leg">${leg}</div>
+        <div class="acts">
+          <a class="btn go" target="_blank" rel="noopener"
+             href="https://2gis.kz/almaty/directions/points/%7C${p.lon}%2C${p.lat}">Поехали</a>
+          <button class="btn sm" data-i="${day.pts.indexOf(p)}">Был</button>
+        </div>
+      </div>`;
+    ol.appendChild(li);
+  });
+
+  day.pts.filter(p=>p.done).forEach(p=>{
+    const li=document.createElement('li');
+    li.className='stop done';
+    li.innerHTML=`<div class="num">✓</div>
+      <div class="body"><div class="name">${p.n}</div><div class="addr">${p.a}</div>
+      <div class="acts"><button class="btn sm" data-undo="${day.pts.indexOf(p)}">Вернуть</button></div></div>`;
+    ol.appendChild(li);
+  });
+
+  ol.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{
+    DAYS[cur].pts[+b.dataset.i].done=true; build();
+  });
+  ol.querySelectorAll('[data-undo]').forEach(b=>b.onclick=()=>{
+    DAYS[cur].pts[+b.dataset.undo].done=false; build();
+  });
+}
+
+/* ---- переключатели ---- */
+$('#roundtrip').onchange=e=>{ $('#tgl-round').dataset.on=e.target.checked?1:0; build(); };
+$('#usegeo').onchange=e=>{
+  $('#tgl-geo').dataset.on=e.target.checked?1:0;
+  if(e.target.checked && !myPos){
+    if(!navigator.geolocation){ alert('Геолокация недоступна'); e.target.checked=false; return; }
+    navigator.geolocation.getCurrentPosition(
+      pos=>{ myPos={lat:pos.coords.latitude, lon:pos.coords.longitude, n:'Я', a:'текущее место'}; build(); },
+      ()=>{ e.target.checked=false; $('#tgl-geo').dataset.on=0;
+            $('#err').textContent='Не дали доступ к геолокации'; $('#err').classList.add('on'); }
+    );
+  } else build();
+};
+
+/* ---- добавление точки ---- */
+$('#find').onclick=search;
+$('#q').onkeydown=e=>{ if(e.key==='Enter') search(); };
+
+let cands=[];
+
+async function search(){
+  const v=$('#q').value.trim();
+  $('#err').classList.remove('on'); $('#found').classList.remove('on');
+  if(v.length<3){ $('#err').textContent='Напиши адрес подробнее'; $('#err').classList.add('on'); return; }
+  $('#find').textContent='Ищу…';
+  try{
+    const u=`https://photon.komoot.io/api/?limit=6&lang=default&lat=43.238&lon=76.889&`+
+            `bbox=76.70,43.10,77.12,43.42&q=${encodeURIComponent('Алматы '+v)}`;
+    const r=await fetch(u).then(r=>r.json());
+    const feats=(r.features||[]).filter(f=>f.geometry&&f.geometry.coordinates);
+    if(!feats.length){
+      $('#err').textContent='Не нашёл такой адрес. Напиши иначе — например, с названием улицы полностью.';
+      $('#err').classList.add('on'); $('#find').textContent='Найти'; return;
+    }
+
+    cands=feats.map(f=>{
+      const c=f.geometry.coordinates, pr=f.properties;
+      const street=[pr.street||pr.name, pr.housenumber].filter(Boolean).join(' ');
+      return { n: (pr.name && pr.name!==street) ? pr.name : (v[0].toUpperCase()+v.slice(1)),
+               a: street||v,
+               where: [pr.district,pr.city].filter(Boolean).join(', '),
+               lat:c[1], lon:c[0] };
+    });
+
+    $('#f-q').textContent = cands.length>1
+      ? `Нашлось ${cands.length} — которое из них?`
+      : 'Это оно?';
+    const box=$('#cands'); box.innerHTML='';
+    cands.forEach((c,i)=>{
+      const d=document.createElement('div');
+      d.className='cand'; d.dataset.sel = i===0 ? '1':'0';
+      d.innerHTML=`<div class="dot"></div>
+        <div><div class="fname">${c.a}</div>
+        <div class="faddr">${c.where||'Алматы'}</div></div>`;
+      d.onclick=()=>choose(i);
+      box.appendChild(d);
+    });
+    $('#found').classList.add('on');
+    choose(0);
+  }catch(e){
+    $('#err').textContent='Сервис поиска не ответил, попробуй ещё раз';
+    $('#err').classList.add('on');
+  }
+  $('#find').textContent='Найти';
+}
+
+/* ---- ручная постановка точки ---- */
+let picking=false;
+$('#manual').onclick=()=>{
+  picking=!picking;
+  $('#mhint').classList.toggle('on',picking);
+  $('#map').classList.toggle('picking',picking);
+  document.querySelector('.map-hold').classList.toggle('picking',picking);
+  $('#manual').textContent = picking ? 'Отменить ручной режим' : 'Или ткнуть в карту вручную';
+  if(picking) document.querySelector('.map-hold').scrollIntoView({behavior:'smooth',block:'center'});
+};
+map.on('click', e=>{
+  if(!picking) return;
+  const v=$('#q').value.trim();
+  cands=[{ n: v || 'Новая точка', a: v || 'точка на карте',
+           where:'поставлена вручную', lat:e.latlng.lat, lon:e.latlng.lng }];
+  $('#f-q').textContent='Точка поставлена вручную';
+  const box=$('#cands');
+  box.innerHTML=`<div class="cand" data-sel="1"><div class="dot"></div>
+    <div><div class="fname">${v||'Новая точка'}</div>
+    <div class="faddr">${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}</div></div></div>`;
+  $('#found').classList.add('on');
+  $('#err').classList.remove('on');
+  choose(0);
+  picking=false;
+  $('#mhint').classList.remove('on');
+  $('#map').classList.remove('picking');
+  document.querySelector('.map-hold').classList.remove('picking');
+  $('#manual').textContent='Или ткнуть в карту вручную';
+});
+
+function choose(i){
+  probeData={...cands[i]};
+  $('#pname').value = probeData.n;
+  document.querySelectorAll('#cands .cand').forEach((el,k)=>el.dataset.sel = k===i?'1':'0');
+  if(probe) layer.removeLayer(probe);
+  probe=pin(probeData,'?','probe');
+  probe.options.draggable=true; probe.addTo(layer);
+  probe.on('dragend',ev=>{
+    const p=ev.target.getLatLng();
+    probeData.lat=p.lat; probeData.lon=p.lng;
+    $('#f-q').textContent='Точку подвинули вручную — так и сохраним';
+  });
+  map.setView([probeData.lat,probeData.lon],16);
+  document.querySelector('.map-hold').scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+$('#ok').onclick=()=>{
+  if(!probeData) return;
+  const nm=$('#pname').value.trim();
+  DAYS[cur].pts.push({...probeData, n: nm || probeData.n, done:false});
+  $('#cnt').textContent=DAYS[cur].pts.length;
+  $('#q').value=''; $('#found').classList.remove('on'); probeData=null;
+  build();
+};
+$('#no').onclick=()=>{
+  $('#found').classList.remove('on');
+  if(probe) layer.removeLayer(probe);
+  probeData=null;
+};
+
+/* ---- старт: сегодняшний день, но в выходные — понедельник ---- */
+const wd=new Date().getDay();
+pick(wd>=1&&wd<=5 ? wd-1 : 0);
+</script>
